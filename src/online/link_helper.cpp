@@ -1,3 +1,4 @@
+
 //  SuperTuxKart - A fun racing game with go-karts
 //  Copyright (C) 2017-18 QwertyChouskie
 //  This program is free software; you can redistribute it and/or
@@ -29,6 +30,35 @@
 #ifdef _MSC_VER
 #pragma comment (lib, "Shell32.lib")
 #endif
+#endif
+
+#if !defined(_WIN32) && !defined(IOS_STK) && !defined(SERVER_ONLY)
+#include <spawn.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+extern char** environ;
+
+static bool spawnOpenURL(const char* program, const std::string& url)
+{
+    pid_t pid;
+
+    char* args[] =
+    {
+        const_cast<char*>(program),
+        const_cast<char*>(url.c_str()),
+        nullptr
+    };
+
+    return posix_spawnp(
+        &pid,
+        program,
+        nullptr,
+        nullptr,
+        args,
+        environ
+    ) != 0;
+}
 #endif
 
 #ifndef SERVER_ONLY
@@ -92,14 +122,11 @@ namespace Online
 #elif defined(IOS_STK)
         irr::CIrrDeviceiOS::openURLiOS(url.c_str());
 #elif defined(__APPLE__) || defined(__HAIKU__)
-        std::string command = std::string("open ").append(url);
-        if (system(command.c_str()))
+        if (spawnOpenURL("open", url))
         {
-            Log::error("OpenURL", "Command returned non-zero exit status");
+            Log::error("OpenURL", "Failed to launch open");
         }
 #elif !defined(__ANDROID__) && (defined(__linux__) || defined(__FreeBSD__) || defined(__NetBSD__))
-        std::string command = std::string("xdg-open ").append(url);
-
         const char* lib_path = getenv("LD_LIBRARY_PATH");
         const char* system_lib_path = getenv("SYSTEM_LD_LIBRARY_PATH");
 
@@ -108,9 +135,9 @@ namespace Online
             setenv("LD_LIBRARY_PATH", system_lib_path, 1);
         }
 
-        if (system(command.c_str()))
+        if (spawnOpenURL("xdg-open", url))
         {
-            Log::error("OpenURL", "Command returned non-zero exit status");
+            Log::error("OpenURL", "Failed to launch xdg-open");
         }
 
         if (system_lib_path != NULL)
